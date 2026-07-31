@@ -5,6 +5,7 @@ import {
   FaFilePdf,
   FaSignOutAlt,
   FaGraduationCap,
+  FaUserGraduate,
 } from "react-icons/fa";
 import { getSessionUser, logout } from "../api";
 
@@ -15,6 +16,7 @@ function Sidebar() {
 
   const links = [
     { to: "/dashboard", label: "Dashboard", icon: <FaHome /> },
+    { to: "/mentor", label: "Mentor", icon: <FaUserGraduate /> },
     { to: "/organizer", label: "Organizer", icon: <FaFolderOpen /> },
     { to: "/viewer/1", label: "Viewer", icon: <FaFilePdf /> },
   ];

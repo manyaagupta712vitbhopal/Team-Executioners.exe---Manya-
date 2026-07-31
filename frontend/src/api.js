@@ -111,4 +111,8 @@ export const getQuiz = (id) => API.get(`/documents/${id}/quiz`);
 export const generateQuiz = (id, options = {}) =>
   API.post(`/documents/${id}/quiz`, options);
 
+/* --------------------------------- Mentor ---------------------------------- */
+
+export const getDailyMentorBriefing = () => API.get("/mentor/daily");
+
 export default API;

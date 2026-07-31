@@ -292,3 +292,166 @@ def _offline_quiz(text: str, count: int) -> dict:
         }]
 
     return {"title": "Offline Generated Quiz", "questions": questions}
+
+
+# --------------------------------------------------------------------------- #
+# Daily Mentor Briefing
+# --------------------------------------------------------------------------- #
+
+def generate_daily_mentor_briefing(user_name: str, context: dict) -> dict:
+    """
+    Acts as a personal study mentor: reviews the student's tasks,
+    assignments, deadlines, and today's study activity, then returns a
+    structured daily briefing — a greeting, motivational note, prioritized
+    action list, a suggested time-blocked schedule, and study tips.
+    """
+    if _gemini_available():
+        try:
+            prompt = _mentor_prompt(user_name, context)
+            raw = _call_gemini(prompt)
+            data = _extract_json(raw)
+            briefing = _normalize_mentor_briefing(data)
+            if briefing:
+                return briefing
+        except Exception:
+            pass  # fall through to offline fallback
+
+    return _offline_mentor_briefing(user_name, context)
+
+
+def _mentor_prompt(user_name: str, context: dict) -> str:
+    return (
+        "You are an encouraging, practical personal study mentor for a "
+        f"student named {user_name}. Using the JSON data below about their "
+        "tasks, assignments, deadlines, and today's study activity, write a "
+        "short daily briefing. Be warm but concise, like a mentor who knows "
+        "their real workload and wants them to succeed without burning out.\n\n"
+        f"STUDENT DATA (JSON):\n{json.dumps(context)}\n\n"
+        "Respond with ONLY valid JSON in this exact shape:\n"
+        '{"greeting": "one warm sentence addressing them by name", '
+        '"motivation": "1-2 sentence encouraging note grounded in their actual workload", '
+        '"priorities": [{"title": "...", "why": "short reason", "urgency": "high|medium|low"}], '
+        '"schedule": [{"time": "e.g. 9:00 AM - 10:00 AM", "activity": "..."}], '
+        '"tips": ["short actionable tip", "..."]}\n'
+        "Base priorities and the schedule on the real assignments/deadlines/"
+        "tasks given — if nothing is due, say so honestly and suggest a "
+        "light, sustainable plan instead of inventing urgency. Keep the "
+        "schedule realistic (4-6 blocks) and include breaks. No markdown, "
+        "no preamble, JSON only."
+    )
+
+
+def _normalize_mentor_briefing(data: dict) -> dict | None:
+    if not isinstance(data, dict):
+        return None
+
+    greeting = str(data.get("greeting", "")).strip()
+    motivation = str(data.get("motivation", "")).strip()
+
+    priorities = []
+    for item in data.get("priorities", []) or []:
+        title = str(item.get("title", "")).strip()
+        if not title:
+            continue
+        urgency = str(item.get("urgency", "medium")).strip().lower()
+        if urgency not in ("high", "medium", "low"):
+            urgency = "medium"
+        priorities.append({
+            "title": title,
+            "why": str(item.get("why", "")).strip(),
+            "urgency": urgency,
+        })
+
+    schedule = []
+    for block in data.get("schedule", []) or []:
+        time_label = str(block.get("time", "")).strip()
+        activity = str(block.get("activity", "")).strip()
+        if time_label and activity:
+            schedule.append({"time": time_label, "activity": activity})
+
+    tips = [str(t).strip() for t in (data.get("tips") or []) if str(t).strip()]
+
+    if not greeting or not motivation:
+        return None
+
+    return {
+        "greeting": greeting,
+        "motivation": motivation,
+        "priorities": priorities,
+        "schedule": schedule,
+        "tips": tips,
+    }
+
+
+def _offline_mentor_briefing(user_name: str, context: dict) -> dict:
+    """Deterministic fallback used when Gemini is unavailable or fails."""
+    tasks = context.get("tasks", [])
+    assignments = context.get("assignments", [])
+    deadlines = context.get("deadlines", [])
+    minutes_studied = context.get("minutes_studied_today", 0)
+
+    open_tasks = [t for t in tasks if not t.get("completed")]
+
+    priorities = []
+    for a in assignments[:3]:
+        priorities.append({
+            "title": a.get("title", "Assignment"),
+            "why": f"Due {a.get('due_date') or 'soon'}.",
+            "urgency": "high" if a.get("priority") == "high" else "medium",
+        })
+    for d in deadlines[:3]:
+        if len(priorities) >= 5:
+            break
+        priorities.append({
+            "title": d.get("title", "Deadline"),
+            "why": f"{d.get('type') or 'Deadline'} on {d.get('date') or 'an upcoming date'}.",
+            "urgency": "medium",
+        })
+    for t in open_tasks[:5]:
+        if len(priorities) >= 6:
+            break
+        priorities.append({
+            "title": t.get("title", "Task"),
+            "why": "On today's planner.",
+            "urgency": "low",
+        })
+
+    if priorities:
+        schedule = [
+            {"time": "9:00 AM - 10:30 AM", "activity": priorities[0]["title"]},
+            {"time": "10:30 AM - 10:45 AM", "activity": "Short break"},
+            {
+                "time": "10:45 AM - 12:00 PM",
+                "activity": priorities[1]["title"] if len(priorities) > 1 else "Review notes",
+            },
+            {
+                "time": "1:00 PM - 2:30 PM",
+                "activity": priorities[2]["title"] if len(priorities) > 2 else "Deep work session",
+            },
+            {"time": "2:30 PM - 2:45 PM", "activity": "Short break"},
+            {"time": "2:45 PM - 4:00 PM", "activity": "Wrap up & review tomorrow's plan"},
+        ]
+        motivation = (
+            f"You've got {len(priorities)} thing{'s' if len(priorities) != 1 else ''} "
+            "worth focusing on today — tackle the biggest one first while your energy is high."
+        )
+    else:
+        schedule = [
+            {"time": "Anytime today", "activity": "Light review of recent material"},
+            {"time": "Anytime today", "activity": "Get ahead by skimming next week's topics"},
+        ]
+        motivation = "Nothing urgent is due — a good day to get ahead or rest and recharge."
+
+    first_name = user_name.split(" ")[0] if user_name else "there"
+
+    return {
+        "greeting": f"Hey {first_name}, here's your day.",
+        "motivation": motivation,
+        "priorities": priorities,
+        "schedule": schedule,
+        "tips": [
+            "Study in focused blocks with short breaks (try 45-50 min on, 10 min off).",
+            f"You've logged {minutes_studied} minute{'s' if minutes_studied != 1 else ''} "
+            "of study today — every bit counts.",
+        ],
+    }
