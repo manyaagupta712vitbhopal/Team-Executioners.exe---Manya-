@@ -16,3 +16,9 @@ class Task(Base):
     planner_id = Column(Integer, ForeignKey("planners.id"))
 
     planner = relationship("Planner", back_populates="tasks")
+
+    attachments = relationship(
+        "PlannerAttachment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+    )

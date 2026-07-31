@@ -326,17 +326,30 @@ def _mentor_prompt(user_name: str, context: dict) -> str:
         "tasks, assignments, deadlines, and today's study activity, write a "
         "short daily briefing. Be warm but concise, like a mentor who knows "
         "their real workload and wants them to succeed without burning out.\n\n"
+        "Some tasks/assignments include an `attachments` list — files the "
+        "student uploaded (e.g. an assignment brief, a rubric, lecture "
+        "notes). Each attachment has a `filename` and, when the file's text "
+        "could be read, an `excerpt` of its actual content. Read those "
+        "excerpts closely: use them to make priorities, the schedule, and "
+        "tips specific to what the file actually asks for (e.g. a due "
+        "sub-task mentioned in a rubric, a topic list in lecture notes) "
+        "instead of generic advice. If an attachment has no excerpt (its "
+        "text couldn't be extracted), just acknowledge the file exists.\n\n"
         f"STUDENT DATA (JSON):\n{json.dumps(context)}\n\n"
         "Respond with ONLY valid JSON in this exact shape:\n"
         '{"greeting": "one warm sentence addressing them by name", '
         '"motivation": "1-2 sentence encouraging note grounded in their actual workload", '
         '"priorities": [{"title": "...", "why": "short reason", "urgency": "high|medium|low"}], '
         '"schedule": [{"time": "e.g. 9:00 AM - 10:00 AM", "activity": "..."}], '
-        '"tips": ["short actionable tip", "..."]}\n'
+        '"tips": ["short actionable tip", "..."], '
+        '"file_insights": [{"source": "filename", "insight": '
+        '"a specific, actionable recommendation drawn from that file\'s content"}]}\n'
         "Base priorities and the schedule on the real assignments/deadlines/"
         "tasks given — if nothing is due, say so honestly and suggest a "
         "light, sustainable plan instead of inventing urgency. Keep the "
-        "schedule realistic (4-6 blocks) and include breaks. No markdown, "
+        "schedule realistic (4-6 blocks) and include breaks. Only include "
+        "file_insights for attachments that had a readable excerpt — omit "
+        "the field entirely (or leave it empty) if none did. No markdown, "
         "no preamble, JSON only."
     )
 
@@ -371,6 +384,13 @@ def _normalize_mentor_briefing(data: dict) -> dict | None:
 
     tips = [str(t).strip() for t in (data.get("tips") or []) if str(t).strip()]
 
+    file_insights = []
+    for item in data.get("file_insights", []) or []:
+        source = str(item.get("source", "")).strip()
+        insight = str(item.get("insight", "")).strip()
+        if source and insight:
+            file_insights.append({"source": source, "insight": insight})
+
     if not greeting or not motivation:
         return None
 
@@ -380,6 +400,7 @@ def _normalize_mentor_briefing(data: dict) -> dict | None:
         "priorities": priorities,
         "schedule": schedule,
         "tips": tips,
+        "file_insights": file_insights,
     }
 
 
@@ -454,4 +475,29 @@ def _offline_mentor_briefing(user_name: str, context: dict) -> dict:
             f"You've logged {minutes_studied} minute{'s' if minutes_studied != 1 else ''} "
             "of study today — every bit counts.",
         ],
+        "file_insights": _offline_file_insights(tasks, assignments),
     }
+
+
+def _offline_file_insights(tasks: list[dict], assignments: list[dict]) -> list[dict]:
+    """
+    Without Gemini, we can't summarize a file's content — but we can still
+    surface that it exists and nudge the student to open it, and do a
+    trivial keyword pull from any extracted excerpt so the fallback isn't
+    completely blind to the file's content.
+    """
+    insights = []
+    for item in list(tasks) + list(assignments):
+        for att in item.get("attachments", []) or []:
+            filename = att.get("filename", "attachment")
+            excerpt = att.get("excerpt")
+            if excerpt:
+                snippet = " ".join(excerpt.split())[:160]
+                insight = f"Skim this before you start — opening lines: “{snippet}…”"
+            else:
+                insight = (
+                    "Attached but not text-readable (e.g. an image or scan) — "
+                    "give it a quick look yourself before diving in."
+                )
+            insights.append({"source": filename, "insight": insight})
+    return insights

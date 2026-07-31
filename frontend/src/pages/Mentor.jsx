@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FaSyncAlt,
   FaClock,
@@ -8,6 +8,8 @@ import {
   FaTrash,
   FaCheckCircle,
   FaRegCircle,
+  FaPaperclip,
+  FaFileAlt,
 } from "react-icons/fa";
 import Sidebar from "../components/Sidebar";
 import {
@@ -23,6 +25,9 @@ import {
   getDeadlines,
   createDeadline,
   deleteDeadline,
+  uploadTaskAttachment,
+  uploadAssignmentAttachment,
+  deleteAttachment,
 } from "../api";
 
 const URGENCY_STYLES = {
@@ -36,6 +41,104 @@ const KINDS = [
   { key: "assignment", label: "Assignment" },
   { key: "deadline", label: "Deadline" },
 ];
+
+/* -------------------------------------------------------------------------- */
+/*  Attachments — attach a file to a task/assignment; the mentor reads it     */
+/* -------------------------------------------------------------------------- */
+
+function AttachmentsBlock({ item, kind, onChange }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError("");
+    try {
+      if (kind === "task") {
+        await uploadTaskAttachment(item.id, file);
+      } else {
+        await uploadAssignmentAttachment(item.id, file);
+      }
+      await onChange?.();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || "Couldn't attach that file.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handleRemove(attachmentId) {
+    await deleteAttachment(attachmentId);
+    await onChange?.();
+  }
+
+  return (
+    <div style={{ marginTop: 4, marginBottom: 6, marginLeft: 22 }}>
+      {(item.attachments || []).map((att) => (
+        <div
+          key={att.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            color: "var(--ink-faint)",
+            marginBottom: 2,
+          }}
+        >
+          <FaFileAlt size={10} />
+          <span
+            style={{
+              flex: 1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={att.extracted ? "Mentor can read this file" : "Attached (not text-readable)"}
+          >
+            {att.filename}
+          </span>
+          <button
+            type="button"
+            onClick={() => handleRemove(att.id)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
+            title="Remove file"
+          >
+            <FaTrash size={10} />
+          </button>
+        </div>
+      ))}
+
+      <label
+        style={{
+          fontSize: 12,
+          color: "var(--violet)",
+          cursor: uploading ? "default" : "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        <FaPaperclip size={10} />
+        {uploading ? "Uploading…" : "Attach file"}
+        <input
+          ref={inputRef}
+          type="file"
+          onChange={handleFileChange}
+          style={{ display: "none" }}
+          disabled={uploading}
+        />
+      </label>
+      {error && <p style={{ fontSize: 11, color: "#B91C1C", marginTop: 2 }}>{error}</p>}
+    </div>
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Tell Mentor panel — where the user assigns work to the mentor             */
@@ -236,36 +339,38 @@ function TellMentorPanel({ onChange }) {
               <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>None yet.</p>
             ) : (
               tasks.map((t) => (
-                <div
-                  key={t.id}
-                  style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleTask(t.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: t.completed ? "#15803D" : "var(--ink-faint)" }}
-                    title="Toggle complete"
+                <div key={t.id} style={{ marginBottom: 6 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
-                    {t.completed ? <FaCheckCircle /> : <FaRegCircle />}
-                  </button>
-                  <span
-                    style={{
-                      fontSize: 13.5,
-                      flex: 1,
-                      textDecoration: t.completed ? "line-through" : "none",
-                      color: t.completed ? "var(--ink-faint)" : "var(--ink)",
-                    }}
-                  >
-                    {t.title}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteTask(t.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
-                    title="Delete"
-                  >
-                    <FaTrash size={12} />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTask(t.id)}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: t.completed ? "#15803D" : "var(--ink-faint)" }}
+                      title="Toggle complete"
+                    >
+                      {t.completed ? <FaCheckCircle /> : <FaRegCircle />}
+                    </button>
+                    <span
+                      style={{
+                        fontSize: 13.5,
+                        flex: 1,
+                        textDecoration: t.completed ? "line-through" : "none",
+                        color: t.completed ? "var(--ink-faint)" : "var(--ink)",
+                      }}
+                    >
+                      {t.title}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTask(t.id)}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
+                      title="Delete"
+                    >
+                      <FaTrash size={12} />
+                    </button>
+                  </div>
+                  <AttachmentsBlock item={t} kind="task" onChange={loadLists} />
                 </div>
               ))
             )}
@@ -280,32 +385,34 @@ function TellMentorPanel({ onChange }) {
               <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>None yet.</p>
             ) : (
               assignments.map((a) => (
-                <div
-                  key={a.id}
-                  style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleCompleteAssignment(a.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink-faint)" }}
-                    title="Mark complete"
+                <div key={a.id} style={{ marginBottom: 6 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
-                    <FaRegCircle />
-                  </button>
-                  <span style={{ fontSize: 13.5, flex: 1 }}>
-                    {a.title}
-                    {a.due_date && (
-                      <span style={{ color: "var(--ink-faint)" }}> · due {a.due_date}</span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteAssignment(a.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
-                    title="Delete"
-                  >
-                    <FaTrash size={12} />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCompleteAssignment(a.id)}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink-faint)" }}
+                      title="Mark complete"
+                    >
+                      <FaRegCircle />
+                    </button>
+                    <span style={{ fontSize: 13.5, flex: 1 }}>
+                      {a.title}
+                      {a.due_date && (
+                        <span style={{ color: "var(--ink-faint)" }}> · due {a.due_date}</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAssignment(a.id)}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
+                      title="Delete"
+                    >
+                      <FaTrash size={12} />
+                    </button>
+                  </div>
+                  <AttachmentsBlock item={a} kind="assignment" onChange={loadLists} />
                 </div>
               ))
             )}
@@ -509,6 +616,34 @@ function Mentor() {
                 </ul>
               </div>
             </div>
+
+            {/* Insights drawn from attached files */}
+            {briefing.file_insights?.length > 0 && (
+              <div className="card" style={{ marginBottom: 24 }}>
+                <div className="feature-icon icon-pink">
+                  <FaPaperclip />
+                </div>
+                <h3 style={{ marginBottom: 12 }}>From your attached files</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {briefing.file_insights.map((fi, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        background: "var(--surface-alt)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                        <FaFileAlt size={12} color="var(--ink-faint)" />
+                        <strong style={{ fontSize: 13 }}>{fi.source}</strong>
+                      </div>
+                      <p style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{fi.insight}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Raw snapshot of what the mentor is basing this on */}
             <div className="card">

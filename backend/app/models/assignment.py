@@ -20,3 +20,9 @@ class Assignment(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
 
     owner = relationship("User", back_populates="assignments")
+
+    attachments = relationship(
+        "PlannerAttachment",
+        back_populates="assignment",
+        cascade="all, delete-orphan",
+    )

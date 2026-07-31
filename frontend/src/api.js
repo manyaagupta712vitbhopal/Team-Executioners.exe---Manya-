@@ -132,4 +132,30 @@ export const getDeadlines = () => API.get("/planner/deadlines");
 export const createDeadline = (data) => API.post("/planner/deadlines", data);
 export const deleteDeadline = (id) => API.delete(`/planner/deadlines/${id}`);
 
+/* ----------------------------- Planner Attachments -------------------------- */
+// Attach files (assignment briefs, rubrics, notes) to a task or assignment.
+// The mentor reads whatever text can be extracted from these to ground its
+// recommendations in the file's actual content.
+
+export const uploadTaskAttachment = (taskId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return API.post(`/planner/tasks/${taskId}/attachments`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const uploadAssignmentAttachment = (assignmentId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return API.post(
+    `/planner/assignments/${assignmentId}/attachments`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+};
+
+export const deleteAttachment = (attachmentId) =>
+  API.delete(`/planner/attachments/${attachmentId}`);
+
 export default API;

@@ -7,6 +7,7 @@ from .annotation import Annotation
 from .sticky_note import StickyNote
 from .planner import Planner
 from .task import Task
+from .attachment import PlannerAttachment
 from .pomodoro import Pomodoro
 from .summary import Summary
 from .flashcard import Flashcard

@@ -2,6 +2,8 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.attachment import AttachmentResponse
+
 
 # --------------------------------------------------------------------------- #
 # Tasks (today's planner)
@@ -15,6 +17,7 @@ class TaskResponse(BaseModel):
     id: int
     title: str
     completed: bool
+    attachments: list[AttachmentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,6 +40,7 @@ class AssignmentResponse(BaseModel):
     due_date: date | None = None
     priority: str | None = None
     completed: bool
+    attachments: list[AttachmentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

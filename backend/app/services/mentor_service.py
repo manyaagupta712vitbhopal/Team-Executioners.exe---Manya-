@@ -19,10 +19,34 @@ from app.models.deadline import Deadline
 from app.models.planner import Planner
 from app.models.pomodoro import Pomodoro
 from app.models.study_session import StudySession
+from app.models.task import Task
 from app.models.user import User
 from app.services import ai_service
+from app.services.attachment_service import load_attachment_text
 
 LOOKAHEAD_DAYS = 7
+MAX_ATTACHMENT_CHARS_PER_FILE = 4000  # keep the mentor prompt small & cheap
+
+
+def _summarize_attachments(attachments: list) -> list[dict]:
+    """
+    Turn a Task's/Assignment's attachments into small JSON-safe dicts for
+    the mentor prompt: filename plus a clipped excerpt of extracted text
+    (when available) so Gemini can ground recommendations in the file's
+    real content, not just its name.
+    """
+    summaries = []
+    for att in attachments:
+        excerpt = None
+        if att.extracted:
+            text = load_attachment_text(att)
+            if text:
+                excerpt = text.strip()[:MAX_ATTACHMENT_CHARS_PER_FILE]
+        summaries.append({
+            "filename": att.filename,
+            "excerpt": excerpt,  # None if not extractable (e.g. an image)
+        })
+    return summaries
 
 
 def _build_context(db: Session, user: User) -> dict:
@@ -31,7 +55,7 @@ def _build_context(db: Session, user: User) -> dict:
 
     planner = (
         db.query(Planner)
-        .options(joinedload(Planner.tasks))
+        .options(joinedload(Planner.tasks).joinedload(Task.attachments))
         .filter(Planner.user_id == user.id, Planner.study_date == today)
         .first()
     )
@@ -39,6 +63,7 @@ def _build_context(db: Session, user: User) -> dict:
 
     assignments = (
         db.query(Assignment)
+        .options(joinedload(Assignment.attachments))
         .filter(
             Assignment.user_id == user.id,
             Assignment.completed.is_(False),
@@ -82,7 +107,11 @@ def _build_context(db: Session, user: User) -> dict:
     return {
         "today": today.isoformat(),
         "tasks": [
-            {"title": t.title, "completed": bool(t.completed)}
+            {
+                "title": t.title,
+                "completed": bool(t.completed),
+                "attachments": _summarize_attachments(t.attachments),
+            }
             for t in today_tasks
         ],
         "assignments": [
@@ -90,6 +119,7 @@ def _build_context(db: Session, user: User) -> dict:
                 "title": a.title,
                 "due_date": a.due_date.isoformat() if a.due_date else None,
                 "priority": a.priority,
+                "attachments": _summarize_attachments(a.attachments),
             }
             for a in assignments
         ],

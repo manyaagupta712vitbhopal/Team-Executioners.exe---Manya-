@@ -12,15 +12,27 @@ class MentorScheduleBlock(BaseModel):
     activity: str
 
 
+class MentorFileInsight(BaseModel):
+    source: str  # attachment filename
+    insight: str
+
+
+class MentorAttachmentSnapshot(BaseModel):
+    filename: str
+    excerpt: str | None = None
+
+
 class MentorTaskSnapshot(BaseModel):
     title: str
     completed: bool
+    attachments: list[MentorAttachmentSnapshot] = []
 
 
 class MentorAssignmentSnapshot(BaseModel):
     title: str
     due_date: str | None = None
     priority: str | None = None
+    attachments: list[MentorAttachmentSnapshot] = []
 
 
 class MentorDeadlineSnapshot(BaseModel):
@@ -44,4 +56,5 @@ class MentorBriefingResponse(BaseModel):
     priorities: list[MentorPriorityItem]
     schedule: list[MentorScheduleBlock]
     tips: list[str]
+    file_insights: list[MentorFileInsight] = []
     context: MentorContext

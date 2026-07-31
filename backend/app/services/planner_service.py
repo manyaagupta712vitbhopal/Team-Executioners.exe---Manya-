@@ -41,7 +41,7 @@ def list_today_tasks(*, db: Session, user_id: int) -> list[Task]:
     today = date.today()
     planner = (
         db.query(Planner)
-        .options(joinedload(Planner.tasks))
+        .options(joinedload(Planner.tasks).joinedload(Task.attachments))
         .filter(Planner.user_id == user_id, Planner.study_date == today)
         .first()
     )
@@ -101,6 +101,7 @@ def add_assignment(
 def list_assignments(*, db: Session, user_id: int) -> list[Assignment]:
     return (
         db.query(Assignment)
+        .options(joinedload(Assignment.attachments))
         .filter(Assignment.user_id == user_id, Assignment.completed.is_(False))
         .order_by(Assignment.due_date.asc().nullslast())
         .all()

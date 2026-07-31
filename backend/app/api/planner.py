@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
+from app.schemas.attachment import AttachmentResponse
 from app.schemas.planner import (
     AssignmentCreate,
     AssignmentResponse,
@@ -11,6 +12,11 @@ from app.schemas.planner import (
     DeadlineResponse,
     TaskCreate,
     TaskResponse,
+)
+from app.services.attachment_service import (
+    add_assignment_attachment,
+    add_task_attachment,
+    delete_attachment,
 )
 from app.services.planner_service import (
     add_assignment,
@@ -87,6 +93,23 @@ def remove_task(
     return delete_task(db=db, task_id=task_id, user_id=current_user.id)
 
 
+@router.post(
+    "/tasks/{task_id}/attachments",
+    response_model=AttachmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Attach a file to a task (the mentor will read it for recommendations)",
+)
+def upload_task_attachment(
+    task_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    return add_task_attachment(
+        db=db, task_id=task_id, file=file, user_id=current_user.id
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Assignments
 # --------------------------------------------------------------------------- #
@@ -152,6 +175,42 @@ def remove_assignment(
 ) -> dict:
     return delete_assignment(
         db=db, assignment_id=assignment_id, user_id=current_user.id
+    )
+
+
+@router.post(
+    "/assignments/{assignment_id}/attachments",
+    response_model=AttachmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Attach a file to an assignment (the mentor will read it for recommendations)",
+)
+def upload_assignment_attachment(
+    assignment_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    return add_assignment_attachment(
+        db=db, assignment_id=assignment_id, file=file, user_id=current_user.id
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Attachments (shared delete — works for either a task's or assignment's file)
+# --------------------------------------------------------------------------- #
+
+@router.delete(
+    "/attachments/{attachment_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a planner attachment",
+)
+def remove_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    return delete_attachment(
+        db=db, attachment_id=attachment_id, user_id=current_user.id
     )
 
 

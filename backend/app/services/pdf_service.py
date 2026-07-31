@@ -9,12 +9,13 @@ from app.models.document import Document
 os.makedirs(settings.EXTRACTED_TEXT_DIR, exist_ok=True)
 
 
-def extract_text(document: Document) -> str:
+def extract_pdf_text(file_path: str) -> str:
     """
-    Extract text from a PDF document and save it as a text file.
+    Extract raw text from a PDF file on disk. Shared by document uploads
+    and planner attachments alike.
     """
     try:
-        pdf = fitz.open(document.file_path)
+        pdf = fitz.open(file_path)
     except Exception as exc:
         raise ValueError("Failed to open PDF. The file may be corrupted.") from exc
 
@@ -31,6 +32,15 @@ def extract_text(document: Document) -> str:
 
     finally:
         pdf.close()
+
+    return full_text
+
+
+def extract_text(document: Document) -> str:
+    """
+    Extract text from a PDF document and save it as a text file.
+    """
+    full_text = extract_pdf_text(document.file_path)
 
     text_filename = f"{document.id}.txt"
     text_path = os.path.join(
