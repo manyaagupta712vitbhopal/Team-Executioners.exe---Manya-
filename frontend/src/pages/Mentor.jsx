@@ -1,13 +1,352 @@
 import { useEffect, useState } from "react";
-import { FaSyncAlt, FaClock, FaFire, FaLightbulb } from "react-icons/fa";
+import {
+  FaSyncAlt,
+  FaClock,
+  FaFire,
+  FaLightbulb,
+  FaPlus,
+  FaTrash,
+  FaCheckCircle,
+  FaRegCircle,
+} from "react-icons/fa";
 import Sidebar from "../components/Sidebar";
-import { getDailyMentorBriefing } from "../api";
+import {
+  getDailyMentorBriefing,
+  getTodayTasks,
+  createTask,
+  toggleTask,
+  deleteTask,
+  getAssignments,
+  createAssignment,
+  completeAssignment,
+  deleteAssignment,
+  getDeadlines,
+  createDeadline,
+  deleteDeadline,
+} from "../api";
 
 const URGENCY_STYLES = {
   high: { bg: "#FEE2E2", color: "#B91C1C" },
   medium: { bg: "#FEF3C7", color: "#92400E" },
   low: { bg: "#DCFCE7", color: "#15803D" },
 };
+
+const KINDS = [
+  { key: "task", label: "Task (today)" },
+  { key: "assignment", label: "Assignment" },
+  { key: "deadline", label: "Deadline" },
+];
+
+/* -------------------------------------------------------------------------- */
+/*  Tell Mentor panel — where the user assigns work to the mentor             */
+/* -------------------------------------------------------------------------- */
+
+function TellMentorPanel({ onChange }) {
+  const [kind, setKind] = useState("task");
+  const [title, setTitle] = useState("");
+  const [when, setWhen] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const [tasks, setTasks] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [deadlines, setDeadlines] = useState([]);
+  const [loadingLists, setLoadingLists] = useState(true);
+
+  async function loadLists() {
+    setLoadingLists(true);
+    try {
+      const [taskRes, assignRes, deadlineRes] = await Promise.all([
+        getTodayTasks(),
+        getAssignments(),
+        getDeadlines(),
+      ]);
+      setTasks(taskRes.data);
+      setAssignments(assignRes.data);
+      setDeadlines(deadlineRes.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingLists(false);
+    }
+  }
+
+  useEffect(() => {
+    loadLists();
+  }, []);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    setSubmitting(true);
+    setError("");
+    try {
+      if (kind === "task") {
+        await createTask(title.trim());
+      } else if (kind === "assignment") {
+        await createAssignment({
+          title: title.trim(),
+          due_date: when || null,
+          priority,
+        });
+      } else {
+        await createDeadline({
+          title: title.trim(),
+          deadline: when || null,
+          type: "deadline",
+        });
+      }
+      setTitle("");
+      setWhen("");
+      await loadLists();
+      onChange?.();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || "Couldn't save that. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleToggleTask(id) {
+    await toggleTask(id);
+    await loadLists();
+    onChange?.();
+  }
+
+  async function handleDeleteTask(id) {
+    await deleteTask(id);
+    await loadLists();
+    onChange?.();
+  }
+
+  async function handleCompleteAssignment(id) {
+    await completeAssignment(id);
+    await loadLists();
+    onChange?.();
+  }
+
+  async function handleDeleteAssignment(id) {
+    await deleteAssignment(id);
+    await loadLists();
+    onChange?.();
+  }
+
+  async function handleDeleteDeadline(id) {
+    await deleteDeadline(id);
+    await loadLists();
+    onChange?.();
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 24 }}>
+      <h3 style={{ marginBottom: 4 }}>Tell your mentor what's on your plate</h3>
+      <p style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 16 }}>
+        Add tasks, assignments, and deadlines here — the mentor above builds
+        your priorities and schedule from exactly this list.
+      </p>
+
+      {/* Kind selector */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        {KINDS.map((k) => (
+          <button
+            key={k.key}
+            type="button"
+            className={`btn btn-sm ${kind === k.key ? "" : "btn-outline"}`}
+            onClick={() => setKind(k.key)}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Add form */}
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}
+      >
+        <input
+          type="text"
+          placeholder={
+            kind === "task"
+              ? "e.g. Finish OS assignment draft"
+              : kind === "assignment"
+              ? "e.g. Data Structures homework 3"
+              : "e.g. Scholarship application"
+          }
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          style={{ flex: "1 1 240px" }}
+          required
+        />
+
+        {kind !== "task" && (
+          <input
+            type="date"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+            style={{ flex: "0 1 160px" }}
+          />
+        )}
+
+        {kind === "assignment" && (
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            style={{ flex: "0 1 130px" }}
+          >
+            <option value="high">High priority</option>
+            <option value="medium">Medium priority</option>
+            <option value="low">Low priority</option>
+          </select>
+        )}
+
+        <button className="btn btn-sm" type="submit" disabled={submitting}>
+          {submitting ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span className="spinner" /> Adding…
+            </span>
+          ) : (
+            <>
+              <FaPlus style={{ marginRight: 6 }} /> Add
+            </>
+          )}
+        </button>
+      </form>
+
+      {error && <p className="error-text" style={{ marginBottom: 12 }}>{error}</p>}
+
+      {/* Current lists */}
+      {!loadingLists && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 16,
+          }}
+        >
+          {/* Tasks */}
+          <div>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-faint)", marginBottom: 8, textTransform: "uppercase" }}>
+              Today's tasks
+            </p>
+            {tasks.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>None yet.</p>
+            ) : (
+              tasks.map((t) => (
+                <div
+                  key={t.id}
+                  style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleToggleTask(t.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: t.completed ? "#15803D" : "var(--ink-faint)" }}
+                    title="Toggle complete"
+                  >
+                    {t.completed ? <FaCheckCircle /> : <FaRegCircle />}
+                  </button>
+                  <span
+                    style={{
+                      fontSize: 13.5,
+                      flex: 1,
+                      textDecoration: t.completed ? "line-through" : "none",
+                      color: t.completed ? "var(--ink-faint)" : "var(--ink)",
+                    }}
+                  >
+                    {t.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTask(t.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
+                    title="Delete"
+                  >
+                    <FaTrash size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Assignments */}
+          <div>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-faint)", marginBottom: 8, textTransform: "uppercase" }}>
+              Assignments
+            </p>
+            {assignments.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>None yet.</p>
+            ) : (
+              assignments.map((a) => (
+                <div
+                  key={a.id}
+                  style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleCompleteAssignment(a.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink-faint)" }}
+                    title="Mark complete"
+                  >
+                    <FaRegCircle />
+                  </button>
+                  <span style={{ fontSize: 13.5, flex: 1 }}>
+                    {a.title}
+                    {a.due_date && (
+                      <span style={{ color: "var(--ink-faint)" }}> · due {a.due_date}</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAssignment(a.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
+                    title="Delete"
+                  >
+                    <FaTrash size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Deadlines */}
+          <div>
+            <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-faint)", marginBottom: 8, textTransform: "uppercase" }}>
+              Deadlines
+            </p>
+            {deadlines.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>None yet.</p>
+            ) : (
+              deadlines.map((d) => (
+                <div
+                  key={d.id}
+                  style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
+                >
+                  <span style={{ fontSize: 13.5, flex: 1 }}>
+                    {d.title}
+                    {d.deadline && (
+                      <span style={{ color: "var(--ink-faint)" }}> · {d.deadline}</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDeadline(d.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)" }}
+                    title="Delete"
+                  >
+                    <FaTrash size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Mentor() {
   const [briefing, setBriefing] = useState(null);
@@ -58,6 +397,8 @@ function Mentor() {
         </div>
 
         {error && <p className="error-text" style={{ marginBottom: 20 }}>{error}</p>}
+
+        <TellMentorPanel onChange={load} />
 
         {loading && !briefing ? (
           <p style={{ color: "var(--ink-faint)" }}>Loading…</p>

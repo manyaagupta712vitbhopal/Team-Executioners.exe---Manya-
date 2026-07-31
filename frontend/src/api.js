@@ -115,4 +115,21 @@ export const generateQuiz = (id, options = {}) =>
 
 export const getDailyMentorBriefing = () => API.get("/mentor/daily");
 
+/* --------------------------------- Planner --------------------------------- */
+
+export const getTodayTasks = () => API.get("/planner/tasks/today");
+export const createTask = (title) => API.post("/planner/tasks", { title });
+export const toggleTask = (id) => API.patch(`/planner/tasks/${id}/toggle`);
+export const deleteTask = (id) => API.delete(`/planner/tasks/${id}`);
+
+export const getAssignments = () => API.get("/planner/assignments");
+export const createAssignment = (data) => API.post("/planner/assignments", data);
+export const completeAssignment = (id) =>
+  API.patch(`/planner/assignments/${id}/complete`);
+export const deleteAssignment = (id) => API.delete(`/planner/assignments/${id}`);
+
+export const getDeadlines = () => API.get("/planner/deadlines");
+export const createDeadline = (data) => API.post("/planner/deadlines", data);
+export const deleteDeadline = (id) => API.delete(`/planner/deadlines/${id}`);
+
 export default API;

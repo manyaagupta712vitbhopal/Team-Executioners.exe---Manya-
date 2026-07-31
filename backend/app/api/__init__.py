@@ -8,6 +8,7 @@ from . import auth
 from . import documents
 from . import folders
 from . import mentor
+from . import planner
 from . import users
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "documents",
     "folders",
     "mentor",
+    "planner",
     "users",
 ]

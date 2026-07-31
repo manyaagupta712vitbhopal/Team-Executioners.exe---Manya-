@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, documents, folders, mentor, study_tools, users
+from app.api import auth, documents, folders, mentor, planner, study_tools, users
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.utils.constants import API_VERSION, APP_NAME
@@ -53,6 +53,7 @@ app.include_router(documents.router)
 app.include_router(folders.router)
 app.include_router(study_tools.router)
 app.include_router(mentor.router)
+app.include_router(planner.router)
 
 
 @app.get("/", tags=["Root"])
